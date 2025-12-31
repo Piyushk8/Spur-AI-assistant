@@ -8,7 +8,7 @@ export interface MessageProps {
   content: string;
 }
 
-const MessageComponent: React.FC<MessageProps> = ({ id, from, content }) => {
+const MessageComponent: React.FC<MessageProps> = ({ from, content }) => {
   const isUser = from === "user";
 
   return (
@@ -22,7 +22,7 @@ const MessageComponent: React.FC<MessageProps> = ({ id, from, content }) => {
         )}
 
         <div
-          className={`px-3 py-2 rounded-lg text-sm break-words ${
+          className={`px-3 py-2 rounded-lg text-sm wrap-break-words ${
             isUser
               ? "bg-blue-600 text-white"
               : "bg-gray-200 text-gray-900"

@@ -52,8 +52,7 @@ export function useStreamingChat() {
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No response body stream");
       const decoder = new TextDecoder("utf-8");
-      
-      
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
@@ -61,7 +60,7 @@ export function useStreamingChat() {
         const chunk = decoder.decode(value, { stream: true });
         const events = parser.parseChunk(chunk);
 
-        for (const { event, data, id } of events) {
+        for (const { event, data } of events) {
           console.log("SSE EVENT", event, "Data:", data);
 
           switch (event) {
@@ -105,8 +104,7 @@ export function useStreamingChat() {
           }
         }
       }
-
-      } catch (err: any) {
+    } catch (err: any) {
       if (err.name !== "AbortError") {
         // console.log("error", err);
         setStreamState({ isStreaming: false, error: err.message });

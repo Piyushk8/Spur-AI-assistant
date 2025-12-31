@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import MessageComponent, {
-  type MessageProps,
 } from "../component/chat/MessageComponent";
 import { useStreamingChat } from "../hooks/useStreamingChat";
 
@@ -11,12 +10,9 @@ const ChatRoom = () => {
 
   const {
     messages,
-    sessionId,
     streamState,
     sendMessage,
-    cancelStream,
-    clearStream,
-  } = useStreamingChat();
+    } = useStreamingChat();
 
   // const handleSendMessage = (e: React.MouseEvent<HTMLButtonElement>) => {
   //   e.preventDefault();
