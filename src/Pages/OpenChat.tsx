@@ -1,18 +1,13 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
-import MessageComponent, {
-} from "../component/chat/MessageComponent";
+import MessageComponent from "../component/chat/MessageComponent";
 import { useStreamingChat } from "../hooks/useStreamingChat";
 
 const ChatRoom = () => {
   const { id } = useParams();
   const [input, setInput] = useState("");
 
-  const {
-    messages,
-    streamState,
-    sendMessage,
-    } = useStreamingChat();
+  const { messages, streamState, sendMessage } = useStreamingChat();
 
   // const handleSendMessage = (e: React.MouseEvent<HTMLButtonElement>) => {
   //   e.preventDefault();
@@ -41,26 +36,50 @@ const ChatRoom = () => {
             />
           ))}
         </div>
+        {streamState.error && (
+          <div className="px-4 py-2 bg-red-100 text-red-800 text-sm">
+            {streamState.error}
+          </div>
+        )}
 
         {/* Input Bar */}
         <footer className="h-16 border-t border-gray-200 px-4 flex items-center gap-2 bg-white">
           <input
-            onChange={(e) => setInput(e.target.value)}
             value={input}
+            onChange={(e) => setInput(e.target.value)}
             disabled={streamState.isStreaming}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                sendMessage(e.currentTarget.value);
+              if (
+                e.key === "Enter" &&
+                !streamState.isStreaming &&
+                input.trim()
+              ) {
+                sendMessage(input.trim());
                 setInput("");
               }
             }}
-            placeholder="Type a message..."
+            placeholder={
+              streamState.isStreaming
+                ? "Agent is responding..."
+                : "Type a message..."
+            }
             className="flex-1 border rounded-lg px-3 py-2 outline-none focus:ring focus:ring-blue-200"
           />
+
           {streamState.isStreaming && <div>Agent typing...</div>}
+
           <button
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || streamState.isStreaming}
+            className={`px-4 py-2 rounded-lg text-white ${
+              !input.trim() || streamState.isStreaming
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
+            onClick={() => {
+              if (!input.trim()) return;
+              sendMessage(input.trim());
+              setInput("");
+            }}
           >
             Send
           </button>

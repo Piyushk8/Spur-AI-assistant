@@ -17,8 +17,25 @@ export function useStreamingChat() {
   });
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const MAX_MESSAGE_LENGTH = 2000;
 
   const sendMessage = async (userMessage: string) => {
+    const trimmed = userMessage.trim();
+
+    if (!trimmed) {
+      setStreamState({ isStreaming: false, error: "Message cannot be empty" });
+      return;
+    }
+
+    if (trimmed.length > MAX_MESSAGE_LENGTH) {
+      setStreamState({
+        isStreaming: false,
+        error: `Message too long. Limit ${MAX_MESSAGE_LENGTH} chars.`,
+      });
+      return;
+    }
+
+    // Streaming safety
     if (streamState.isStreaming) {
       abortControllerRef.current?.abort();
     }
@@ -81,7 +98,6 @@ export function useStreamingChat() {
               );
               break;
             case "done":
-              // Stream completed
               const sid =
                 typeof data === "object"
                   ? data.sessionId ?? data?.data?.sessionId
@@ -105,12 +121,18 @@ export function useStreamingChat() {
         }
       }
     } catch (err: any) {
-      if (err.name !== "AbortError") {
-        // console.log("error", err);
-        setStreamState({ isStreaming: false, error: err.message });
+      if (err.name === "AbortError") return;
 
-        setMessages((prev) => prev.filter((m) => m.id !== aiId));
-      }
+      const readableError =
+        err?.message === "Failed to fetch"
+          ? "Network error. Check internet."
+          : err?.message || "Something went wrong";
+
+      setStreamState({
+        isStreaming: false,
+        error: readableError,
+      });
+      setMessages((prev) => prev.filter((m) => m.id !== aiId));
     } finally {
       setStreamState((prev) => ({ ...prev, isStreaming: false }));
     }
