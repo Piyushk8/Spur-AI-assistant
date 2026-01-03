@@ -54,6 +54,7 @@ export function useStreamingChat() {
     let fullAIReply = "";
     const parser = new SSEParser();
     try {
+      console.log(SERVER_URL)
       const response = await fetch(
         `${SERVER_URL}/chat/stream?message=${encodeURIComponent(
           userMessage
@@ -78,8 +79,6 @@ export function useStreamingChat() {
         const events = parser.parseChunk(chunk);
 
         for (const { event, data } of events) {
-          console.log("SSE EVENT", event, "Data:", data);
-
           switch (event) {
             case "open":
               console.log("SSE Connection Openend");
@@ -116,7 +115,7 @@ export function useStreamingChat() {
               throw new Error(errorMsg);
 
             default:
-              console.warn("Unknown SSE event type:", event);
+              // console.warn("Unknown SSE event type:", event);
           }
         }
       }
