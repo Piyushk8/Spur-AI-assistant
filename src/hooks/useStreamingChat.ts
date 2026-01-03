@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from "react";
-import { SSEParser, type StreamState } from "./SSEParser";
 import { SERVER_URL } from "../utils/constants";
 
 export interface MessageProps {
@@ -11,17 +10,16 @@ export interface MessageProps {
 export function useStreamingChat() {
   const [messages, setMessages] = useState<MessageProps[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [streamState, setStreamState] = useState<StreamState>({
+  const [streamState, setStreamState] = useState({
     isStreaming: false,
-    error: null,
+    error: null as string | null,
   });
 
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
   const MAX_MESSAGE_LENGTH = 2000;
 
   const sendMessage = async (userMessage: string) => {
     const trimmed = userMessage.trim();
-
     if (!trimmed) {
       setStreamState({ isStreaming: false, error: "Message cannot be empty" });
       return;
@@ -35,11 +33,8 @@ export function useStreamingChat() {
       return;
     }
 
-    // Streaming safety
-    if (streamState.isStreaming) {
-      abortControllerRef.current?.abort();
-    }
-    abortControllerRef.current = new AbortController();
+    // Close any existing stream
+    eventSourceRef.current?.close();
 
     const userId = crypto.randomUUID();
     const aiId = crypto.randomUUID();
@@ -47,105 +42,62 @@ export function useStreamingChat() {
     setMessages((prev) => [
       ...prev,
       { id: userId, from: "user", content: userMessage },
-      { id: aiId, from: "ai", content: "" }, // placeholder bot message
+      { id: aiId, from: "ai", content: "" },
     ]);
 
     setStreamState({ isStreaming: true, error: null });
+
     let fullAIReply = "";
-    const parser = new SSEParser();
-    try {
-      console.log(SERVER_URL)
-      const response = await fetch(
-        `${SERVER_URL}/chat/stream?message=${encodeURIComponent(
-          userMessage
-        )}&sessionId=${sessionId}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-          signal: abortControllerRef.current.signal,
-        }
+
+    const url =
+      `${SERVER_URL}/chat/stream` +
+      `?message=${encodeURIComponent(userMessage)}` +
+      `&sessionId=${sessionId ?? ""}`;
+
+    const es = new EventSource(url);
+    eventSourceRef.current = es;
+
+    es.addEventListener("open", () => {
+      console.log("SSE connected");
+    });
+
+    es.addEventListener("message", (e) => {
+      fullAIReply += e.data;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === aiId ? { ...m, content: fullAIReply } : m
+        )
       );
-      if (!response.ok) throw new Error("Failed to connect to stream");
+    });
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error("No response body stream");
-      const decoder = new TextDecoder("utf-8");
+    es.addEventListener("done", (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data?.sessionId) setSessionId(data.sessionId);
+      } catch (_) {}
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      setStreamState({ isStreaming: false, error: null });
+      es.close();
+    });
 
-        const chunk = decoder.decode(value, { stream: true });
-        const events = parser.parseChunk(chunk);
-
-        for (const { event, data } of events) {
-          switch (event) {
-            case "open":
-              console.log("SSE Connection Openend");
-              break;
-            case "close":
-              console.log("SSE Connection Closed");
-              break;
-            case "message":
-              const token = typeof data == "string" ? data : data?.data || "";
-              fullAIReply += token;
-
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === aiId ? { ...m, content: fullAIReply } : m
-                )
-              );
-              break;
-            case "done":
-              const sid =
-                typeof data === "object"
-                  ? data.sessionId ?? data?.data?.sessionId
-                  : null;
-
-              if (sid) setSessionId(sid);
-
-              setStreamState((prev) => ({ ...prev, isStreaming: false }));
-              break;
-
-            case "error":
-              const errorMsg =
-                typeof data === "string"
-                  ? data
-                  : data?.message ?? "Stream error occurred";
-              throw new Error(errorMsg);
-
-            default:
-              // console.warn("Unknown SSE event type:", event);
-          }
-        }
-      }
-    } catch (err: any) {
-      if (err.name === "AbortError") return;
-
-      const readableError =
-        err?.message === "Failed to fetch"
-          ? "Network error. Check internet."
-          : err?.message || "Something went wrong";
-
+    es.addEventListener("error", () => {
+      es.close();
       setStreamState({
         isStreaming: false,
-        error: readableError,
+        error: "Streaming connection lost",
       });
       setMessages((prev) => prev.filter((m) => m.id !== aiId));
-    } finally {
-      setStreamState((prev) => ({ ...prev, isStreaming: false }));
-    }
-
-    return fullAIReply;
+    });
   };
 
   const cancelStream = useCallback(() => {
-    abortControllerRef.current?.abort();
+    eventSourceRef.current?.close();
     setStreamState((prev) => ({ ...prev, isStreaming: false }));
   }, []);
 
   const clearStream = useCallback(() => {
-    abortControllerRef.current?.abort();
+    eventSourceRef.current?.close();
     setMessages([]);
     setSessionId(null);
     setStreamState({ isStreaming: false, error: null });
